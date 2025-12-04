@@ -2,7 +2,7 @@ import streamlit as st
 import time
 
 # --- 1. QUIZ DATA SETUP ---
-# We store the questions, options, and answers for both papers here.
+# We store the questions, options, and answers for 7 papers here.
 
 PAPERS = {
     "Paper 1": [
@@ -50,7 +50,7 @@ PAPERS = {
             "answer": "80",
             "explanation": "The rule is Square the number, then subtract 1 (n^2 - 1). 9*9 = 81 - 1 = 80."
         },
-        # Non-Verbal (Text Descriptions)
+        # Non-Verbal
         {
             "category": "Figure Classification",
             "question": "Shape 1: Square w/ horizontal line. Shape 2: Circle w/ horizontal line. Shape 3: Triangle w/ horizontal line. Which shape belongs?",
@@ -154,6 +154,381 @@ PAPERS = {
             "answer": "5-Pointed Star",
             "explanation": "The points of a standard star are small equilateral triangles."
         }
+    ],
+    "Paper 3": [
+        # Verbal
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Apple | Pear | Banana",
+            "options": ["Carrot", "Tomato", "Orange", "Potato", "Lettuce"],
+            "answer": "Orange",
+            "explanation": "Apple, Pear, and Banana are all fruits. Orange is also a fruit. The others are vegetables."
+        },
+        {
+            "category": "Verbal Analogies",
+            "question": "Complete the pair: Day : Night :: Summer : ______",
+            "options": ["Spring", "Autumn", "Winter", "Sun", "Cold"],
+            "answer": "Winter",
+            "explanation": "Day is the opposite of Night. Summer is the opposite season to Winter."
+        },
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Football | Rugby | Hockey",
+            "options": ["Swimming", "Running", "Tennis", "Cycling", "Gymnastics"],
+            "answer": "Tennis",
+            "explanation": "These are all sports played with a ball or object (puck/ball) and involve teams/matches. Tennis fits best."
+        },
+        # Quantitative
+        {
+            "category": "Number Analogies",
+            "question": "[3 -> 12] and [5 -> 20]. Apply the same rule to [7 -> ?]",
+            "options": ["21", "28", "30", "35", "14"],
+            "answer": "28",
+            "explanation": "Rule: Multiply by 4. 7 * 4 = 28."
+        },
+        {
+            "category": "Number Series",
+            "question": "What comes next: 2, 4, 8, 16, ___",
+            "options": ["24", "32", "30", "20", "48"],
+            "answer": "32",
+            "explanation": "Doubling pattern: x2. 16 * 2 = 32."
+        },
+        {
+            "category": "Number Analogies",
+            "question": "[10 -> 5] and [20 -> 10]. Apply the same rule to [50 -> ?]",
+            "options": ["25", "100", "40", "30", "15"],
+            "answer": "25",
+            "explanation": "Rule: Divide by 2. 50 / 2 = 25."
+        },
+        # Non-Verbal
+        {
+            "category": "Figure Classification",
+            "question": "Shape 1: Triangle. Shape 2: Square. Shape 3: Pentagon. Which belongs?",
+            "options": ["Circle", "Hexagon", "Crescent", "Line"],
+            "answer": "Hexagon",
+            "explanation": "All are regular polygons with increasing sides (3, 4, 5). Hexagon (6) fits the category of polygons."
+        },
+        {
+            "category": "Figure Matrices",
+            "question": "Row 1: [Circle] -> [Circle + Dot]. Row 2: [Square] -> [?]",
+            "options": ["Square", "Square + Dot", "Circle + Dot", "Triangle"],
+            "answer": "Square + Dot",
+            "explanation": "Rule: Add a dot to the center of the shape."
+        },
+        {
+            "category": "Figure Analysis (Paper Folding)",
+            "question": "Fold square horizontal (Top to Bottom). Punch hole Bottom-Right. Unfold?",
+            "options": ["Top-Right only", "Bottom-Right only", "Bottom-Right & Top-Right", "Four Corners"],
+            "answer": "Bottom-Right & Top-Right",
+            "explanation": "The horizontal fold mirrors the bottom-right hole to the top-right."
+        },
+        {
+            "category": "Figure Recognition",
+            "question": "Target: Letter 'Z'. Where is it hidden?",
+            "options": ["Grid of squares", "Zig-zag line pattern", "Overlapping circles", "Triangle mesh"],
+            "answer": "Zig-zag line pattern",
+            "explanation": "A zig-zag pattern contains the sharp angles and lines to form a 'Z'."
+        }
+    ],
+    "Paper 4": [
+        # Verbal
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Iron | Copper | Zinc",
+            "options": ["Water", "Lead", "Wood", "Plastic", "Gas"],
+            "answer": "Lead",
+            "explanation": "Iron, Copper, and Zinc are metals. Lead is also a metal."
+        },
+        {
+            "category": "Verbal Analogies",
+            "question": "Complete the pair: Doctor : Hospital :: Teacher : ______",
+            "options": ["Study", "Book", "School", "Student", "Class"],
+            "answer": "School",
+            "explanation": "A Doctor works in a Hospital. A Teacher works in a School."
+        },
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Happy | Joyful | Cheerful",
+            "options": ["Sad", "Angry", "Glad", "Bored", "Tired"],
+            "answer": "Glad",
+            "explanation": "These are all synonyms for happiness. Glad is also a synonym."
+        },
+        # Quantitative
+        {
+            "category": "Number Analogies",
+            "question": "[11 -> 13] and [15 -> 17]. Apply the same rule to [20 -> ?]",
+            "options": ["21", "22", "23", "25", "24"],
+            "answer": "22",
+            "explanation": "Rule: Add 2. 20 + 2 = 22."
+        },
+        {
+            "category": "Number Series",
+            "question": "What comes next: 100, 90, 80, 70, ___",
+            "options": ["50", "65", "60", "55", "40"],
+            "answer": "60",
+            "explanation": "Subtract 10 pattern. 70 - 10 = 60."
+        },
+        {
+            "category": "Number Analogies",
+            "question": "[4 -> 16] and [3 -> 9]. Apply the same rule to [6 -> ?]",
+            "options": ["12", "30", "36", "42", "24"],
+            "answer": "36",
+            "explanation": "Rule: Square the number. 6 * 6 = 36."
+        },
+        # Non-Verbal
+        {
+            "category": "Figure Classification",
+            "question": "Shape 1: Dotted Circle. Shape 2: Dotted Square. Shape 3: Dotted Triangle. Which belongs?",
+            "options": ["Solid Star", "Dotted Star", "Solid Hexagon", "Striped Circle"],
+            "answer": "Dotted Star",
+            "explanation": "The common feature is the dotted outline."
+        },
+        {
+            "category": "Figure Matrices",
+            "question": "Row 1: [Vertical Line] -> [Horizontal Line]. Row 2: [Vertical Arrow] -> [?]",
+            "options": ["Vertical Arrow", "Diagonal Arrow", "Horizontal Arrow", "Cross"],
+            "answer": "Horizontal Arrow",
+            "explanation": "Rule: Rotate 90 degrees."
+        },
+        {
+            "category": "Figure Analysis",
+            "question": "Fold square Diagonally. Punch hole on the folded crease (Top Left). Unfold?",
+            "options": ["One hole in center", "Two holes corners", "Four holes", "No holes"],
+            "answer": "One hole in center",
+            "explanation": "Punching exactly on the fold line results in a single hole (or joined holes) in the center when unfolded."
+        },
+        {
+            "category": "Figure Recognition",
+            "question": "Target: Letter 'T'. Where is it hidden?",
+            "options": ["Curve pattern", "Hexagonal grid", "Square grid pattern", "Spiral"],
+            "answer": "Square grid pattern",
+            "explanation": "A square grid contains perpendicular lines that form a 'T'."
+        }
+    ],
+    "Paper 5": [
+        # Verbal
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Oak | Elm | Pine",
+            "options": ["Rose", "Ash", "Grass", "Leaf", "Bark"],
+            "answer": "Ash",
+            "explanation": "Oak, Elm, and Pine are types of trees. Ash is also a tree."
+        },
+        {
+            "category": "Verbal Analogies",
+            "question": "Complete the pair: Puppy : Dog :: Kitten : ______",
+            "options": ["Cat", "Mouse", "Pet", "Fur", "Animal"],
+            "answer": "Cat",
+            "explanation": "Puppy is the young of a Dog. Kitten is the young of a Cat."
+        },
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Car | Bus | Truck",
+            "options": ["Boat", "Plane", "Van", "Train", "Rocket"],
+            "answer": "Van",
+            "explanation": "These are all motor vehicles that travel on roads. Van is also a road vehicle."
+        },
+        # Quantitative
+        {
+            "category": "Number Analogies",
+            "question": "[2 -> 5] and [3 -> 7]. Apply the same rule to [5 -> ?]",
+            "options": ["10", "11", "9", "12", "15"],
+            "answer": "11",
+            "explanation": "Rule: (x2) + 1. 5 * 2 + 1 = 11."
+        },
+        {
+            "category": "Number Series",
+            "question": "What comes next: 1, 2, 4, 7, 11, ___",
+            "options": ["15", "16", "14", "18", "20"],
+            "answer": "16",
+            "explanation": "Pattern increases by +1, +2, +3, +4. Next is +5. 11 + 5 = 16."
+        },
+        {
+            "category": "Number Analogies",
+            "question": "[100 -> 10] and [81 -> 9]. Apply the same rule to [49 -> ?]",
+            "options": ["7", "8", "6", "14", "24"],
+            "answer": "7",
+            "explanation": "Rule: Square Root. Sqrt(49) = 7."
+        },
+        # Non-Verbal
+        {
+            "category": "Figure Classification",
+            "question": "Shape 1: Black Circle. Shape 2: Black Square. Shape 3: Black Triangle. Which belongs?",
+            "options": ["White Circle", "Black Star", "Striped Square", "Grey Oval"],
+            "answer": "Black Star",
+            "explanation": "The common feature is that the shape is solid black (Shading)."
+        },
+        {
+            "category": "Figure Matrices",
+            "question": "Row 1: [Square with X] -> [Square]. Row 2: [Circle with X] -> [?]",
+            "options": ["Circle with X", "Circle", "Square", "Triangle"],
+            "answer": "Circle",
+            "explanation": "Rule: Remove the 'X' from inside the shape."
+        },
+        {
+            "category": "Figure Analysis",
+            "question": "Fold square Top-to-Bottom. Then fold Left-to-Right. Punch Center. Unfold?",
+            "options": ["1 hole", "2 holes", "4 holes", "8 holes"],
+            "answer": "4 holes",
+            "explanation": "Folding twice creates 4 layers. Punching once through 4 layers creates 4 holes."
+        },
+        {
+            "category": "Figure Recognition",
+            "question": "Target: Letter 'U'. Where is it hidden?",
+            "options": ["Triangle grid", "Straight lines", "Chain link pattern", "Dot matrix"],
+            "answer": "Chain link pattern",
+            "explanation": "A chain link pattern contains curved loops that look like 'U'."
+        }
+    ],
+    "Paper 6 (Harder)": [
+        # Verbal (Nuanced & Scientific)
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Transparent | Translucent | Opaque",
+            "options": ["See-through", "Solid", "Reflective", "Shiny", "Clear"],
+            "answer": "Reflective",
+            "explanation": "These are all properties of how materials interact with light (Optical properties). 'Reflective' fits this category better than 'Solid' (state of matter) or 'Clear' (which is a synonym for Transparent)."
+        },
+        {
+            "category": "Verbal Analogies",
+            "question": "Complete the pair: Fragile : Break :: Elastic : ______",
+            "options": ["Bend", "Stretch", "Rubber", "Snap", "Hard"],
+            "answer": "Stretch",
+            "explanation": "Fragile describes something prone to Breaking. Elastic describes something prone to Stretching."
+        },
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Generous | Benevolent | Charitable",
+            "options": ["Happy", "Rich", "Philanthropic", "Friendly", "Spending"],
+            "answer": "Philanthropic",
+            "explanation": "These words describe the act of giving to others. 'Philanthropic' is the closest formal synonym."
+        },
+        # Quantitative (Alternating & Complex)
+        {
+            "category": "Number Series",
+            "question": "What comes next: 2, 10, 4, 20, 6, 30, ___",
+            "options": ["8", "12", "40", "36", "60"],
+            "answer": "8",
+            "explanation": "This is an interleaved series. Series A: 2, 4, 6... (Next is 8). Series B: 10, 20, 30..."
+        },
+        {
+            "category": "Number Analogies",
+            "question": "[8 -> 3] and [12 -> 5]. Apply the same rule to [20 -> ?]",
+            "options": ["9", "10", "8", "7", "11"],
+            "answer": "9",
+            "explanation": "Rule: Halve the number, then subtract 1. (8/2)-1=3. (20/2)-1=9."
+        },
+        {
+            "category": "Number Series",
+            "question": "What comes next: 50, 45, 41, 38, 36, ___",
+            "options": ["35", "34", "33", "30", "32"],
+            "answer": "35",
+            "explanation": "Subtract descending integers: -5, -4, -3, -2. Next is -1. 36 - 1 = 35."
+        },
+        # Non-Verbal (Conditional & Logic)
+        {
+            "category": "Figure Classification",
+            "question": "Shape 1: 3-sided shape (Black). Shape 2: 4-sided shape (White). Shape 3: 5-sided shape (Black). Rule: Odd sides are Black, Even sides are White. Which belongs?",
+            "options": ["6-sided (Black)", "6-sided (White)", "3-sided (White)", "4-sided (Black)"],
+            "answer": "6-sided (White)",
+            "explanation": "Logic: Even number of sides (6) must be White."
+        },
+        {
+            "category": "Figure Matrices",
+            "question": "Row 1: [Circle] -> [Square]. Row 2: [Triangle] -> [?]. Rule: Add 1 side.",
+            "options": ["Pentagon", "Square", "Hexagon", "Circle"],
+            "answer": "Square",
+            "explanation": "Circle (1 curve) -> Square (4) is not a clear add 1. Let's re-evaluate: Triangle (3) -> Square (4) is add 1 side."
+        },
+        {
+            "category": "Figure Analysis",
+            "question": "Square folded twice (Quarter size). Punch Hole through ALL layers in the Center. Unfold.",
+            "options": ["1 Central Hole", "4 Central Holes", "4 Corner Holes", "2 Side Holes"],
+            "answer": "4 Central Holes",
+            "explanation": "Punching the center of a quarter-folded square means you punch near the 'folded corner' which is the center of the original paper. This creates 4 holes huddled in the center."
+        },
+        {
+            "category": "Figure Recognition",
+            "question": "Target: Number '4'. Where is it hidden?",
+            "options": ["Circle patterns", "Triangle grid", "Overlapping squares", "A flag drawing"],
+            "answer": "Triangle grid",
+            "explanation": "The number 4 is composed of a triangle on a vertical stick. A grid of triangles contains this geometry."
+        }
+    ],
+    "Paper 7 (Advanced)": [
+        # Verbal
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Rain | Hail | Snow",
+            "options": ["Cloud", "Sleet", "Storm", "Water", "Cold"],
+            "answer": "Sleet",
+            "explanation": "These are all forms of precipitation. Sleet is another form."
+        },
+        {
+            "category": "Verbal Analogies",
+            "question": "Complete the pair: Solar : Sun :: Lunar : ______",
+            "options": ["Planet", "Star", "Moon", "Sky", "Space"],
+            "answer": "Moon",
+            "explanation": "Solar relates to the Sun. Lunar relates to the Moon."
+        },
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Biology | Chemistry | Physics",
+            "options": ["History", "Botany", "Literature", "Geography", "Art"],
+            "answer": "Botany",
+            "explanation": "These are natural sciences. Botany (study of plants) is a sub-branch of Biology/Science."
+        },
+        # Quantitative
+        {
+            "category": "Number Series",
+            "question": "What comes next: 1, 1, 2, 3, 5, 8, ___",
+            "options": ["10", "12", "13", "15", "11"],
+            "answer": "13",
+            "explanation": "Fibonacci Sequence: Add the previous two numbers. 5 + 8 = 13."
+        },
+        {
+            "category": "Number Analogies",
+            "question": "[4 -> 0.5] and [8 -> 1]. Apply the same rule to [20 -> ?]",
+            "options": ["2", "2.5", "5", "10", "1.5"],
+            "answer": "2.5",
+            "explanation": "Rule: Divide by 8. 4/8=0.5, 8/8=1, 20/8=2.5."
+        },
+        {
+            "category": "Number Series",
+            "question": "What comes next: 3, 6, 12, 24, ___",
+            "options": ["36", "40", "48", "30", "50"],
+            "answer": "48",
+            "explanation": "Rule: Multiply by 2 (Doubling). 24 * 2 = 48."
+        },
+        # Non-Verbal
+        {
+            "category": "Figure Classification",
+            "question": "Shape 1: Clock at 3:00. Shape 2: Clock at 9:00. Shape 3: Letter 'T'. Which belongs?",
+            "options": ["Letter 'L'", "Letter 'V'", "Letter 'K'", "Clock at 2:00"],
+            "answer": "Letter 'L'",
+            "explanation": "The common feature is a 90-degree (Right) Angle."
+        },
+        {
+            "category": "Figure Matrices",
+            "question": "Row 1: [Square] -> [Cube]. Row 2: [Triangle] -> [?]",
+            "options": ["Pyramid", "Square", "Circle", "Cylinder"],
+            "answer": "Pyramid",
+            "explanation": "Rule: 2D shape becomes its 3D counterpart. Triangle becomes Pyramid (or Tetrahedron)."
+        },
+        {
+            "category": "Figure Analysis",
+            "question": "Fold square Diagonally. Punch hole in the hypotenuse (long edge). Unfold.",
+            "options": ["2 holes on edges", "2 holes in center", "1 hole", "4 holes"],
+            "answer": "2 holes on edges",
+            "explanation": "The hypotenuse of the folded triangle is the diagonal of the square. Punching it creates holes on the diagonal line."
+        },
+        {
+            "category": "Figure Recognition",
+            "question": "Target: Letter 'X'. Where is it hidden?",
+            "options": ["Parallel lines", "Diamond Grid", "Circles", "Waves"],
+            "answer": "Diamond Grid",
+            "explanation": "A diamond grid is formed by intersecting diagonal lines, which create many 'X' shapes."
+        }
     ]
 }
 
@@ -226,14 +601,43 @@ if not st.session_state.quiz_active and not st.session_state.finished:
     st.markdown("### Select a Practice Paper")
     st.info("You will have **10 minutes** to complete 10 questions.")
     
-    col1, col2 = st.columns(2)
-    with col1:
+    # Grid Layout for 7 Papers
+    row1 = st.columns(3)
+    row2 = st.columns(3)
+    row3 = st.columns(1)
+    
+    # Buttons Row 1
+    with row1[0]:
         if st.button("Start Paper 1", use_container_width=True):
             start_quiz("Paper 1")
             st.rerun()
-    with col2:
+    with row1[1]:
         if st.button("Start Paper 2", use_container_width=True):
             start_quiz("Paper 2")
+            st.rerun()
+    with row1[2]:
+        if st.button("Start Paper 3", use_container_width=True):
+            start_quiz("Paper 3")
+            st.rerun()
+            
+    # Buttons Row 2
+    with row2[0]:
+        if st.button("Start Paper 4", use_container_width=True):
+            start_quiz("Paper 4")
+            st.rerun()
+    with row2[1]:
+        if st.button("Start Paper 5", use_container_width=True):
+            start_quiz("Paper 5")
+            st.rerun()
+    with row2[2]:
+        if st.button("Start Paper 6 (Harder)", use_container_width=True):
+            start_quiz("Paper 6 (Harder)")
+            st.rerun()
+
+    # Buttons Row 3 (Advanced)
+    with row3[0]:
+        if st.button("Start Paper 7 (Advanced)", use_container_width=True):
+            start_quiz("Paper 7 (Advanced)")
             st.rerun()
 
 # B. QUIZ SCREEN
