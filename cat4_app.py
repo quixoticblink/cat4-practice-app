@@ -2,7 +2,7 @@ import streamlit as st
 import time
 
 # --- 1. QUIZ DATA SETUP ---
-# We store the questions, options, and answers for 7 papers here.
+# We store the questions, options, and answers for 10 papers here.
 
 PAPERS = {
     "Paper 1": [
@@ -529,6 +529,231 @@ PAPERS = {
             "answer": "Diamond Grid",
             "explanation": "A diamond grid is formed by intersecting diagonal lines, which create many 'X' shapes."
         }
+    ],
+    "Paper 8 (Complex Logic)": [
+        # Verbal: Degree of Intensity & Function
+        {
+            "category": "Verbal Analogies",
+            "question": "Complete the pair: Cool : Cold :: Warm : ______",
+            "options": ["Tepid", "Hot", "Boiling", "Freezing", "Heat"],
+            "answer": "Hot",
+            "explanation": "Degree of intensity. 'Cold' is a stronger version of 'Cool'. 'Hot' is the stronger version of 'Warm'."
+        },
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Anxiety | Fear | Panic",
+            "options": ["Bravery", "Terror", "Calm", "Sleep", "Emotion"],
+            "answer": "Terror",
+            "explanation": "These are all words describing increasing levels of fear/negative emotion. Terror fits this category."
+        },
+        # Quantitative: Ratios and Decimals
+        {
+            "category": "Number Series",
+            "question": "What comes next: 0.2, 0.4, 0.8, 1.6, ___",
+            "options": ["2.4", "3.0", "3.2", "1.8", "2.0"],
+            "answer": "3.2",
+            "explanation": "Doubling pattern with decimals. 1.6 * 2 = 3.2."
+        },
+        {
+            "category": "Number Analogies",
+            "question": "[4 -> 12] and [6 -> 18]. Apply the same rule to [15 -> ?]",
+            "options": ["30", "45", "60", "20", "25"],
+            "answer": "45",
+            "explanation": "Rule: Multiply by 3. 15 * 3 = 45."
+        },
+        # Non-Verbal: Shape Addition & Intersections
+        {
+            "category": "Figure Matrices",
+            "question": "Row 1: [Left Half Circle] + [Right Half Circle] -> [Full Circle]. Row 2: [Top Half Square] + [?] -> [Full Square].",
+            "options": ["Bottom Half Square", "Top Half Square", "Full Square", "Circle"],
+            "answer": "Bottom Half Square",
+            "explanation": "Addition Logic: Part A + Part B = Complete Shape."
+        },
+        {
+            "category": "Figure Classification",
+            "question": "Shape 1: Two intersecting Circles. Shape 2: Two intersecting Triangles. Shape 3: Two intersecting Squares. Which belongs?",
+            "options": ["One Circle", "Two separated Circles", "Two intersecting Ovals", "Three Circles"],
+            "answer": "Two intersecting Ovals",
+            "explanation": "The rule is 'Two identical shapes intersecting'."
+        },
+        {
+            "category": "Figure Analysis",
+            "question": "Square folded in half (Rect). Folded again (Square). Punch hole in Top Right. Unfold.",
+            "options": ["1 Hole Top Right", "4 Holes (Corners)", "2 Holes (Top)", "1 Hole Center"],
+            "answer": "4 Holes (Corners)",
+            "explanation": "Punching the open corner of a double-folded square affects all 4 outer corners of the original paper."
+        },
+        {
+            "category": "Verbal Analogies",
+            "question": "Complete the pair: Chisel : Sculptor :: Scalpel : ______",
+            "options": ["Artist", "Surgeon", "Doctor", "Hospital", "Nurse"],
+            "answer": "Surgeon",
+            "explanation": "Tool to Professional relationship. A chisel is the primary tool of a sculptor; a scalpel is the primary tool of a surgeon."
+        },
+        {
+            "category": "Number Series",
+            "question": "What comes next: 1/2, 1/4, 1/8, 1/16, ___",
+            "options": ["1/20", "1/24", "1/32", "1/18", "0"],
+            "answer": "1/32",
+            "explanation": "Halving the fraction each time (Denominator multiplies by 2)."
+        },
+        {
+            "category": "Figure Recognition",
+            "question": "Target: Letter 'A'. Where is it hidden?",
+            "options": ["Pentagon Star", "Square Grid", "Circles", "Waves"],
+            "answer": "Pentagon Star",
+            "explanation": "The top point of a 5-pointed star contains the 'V' shape with a horizontal bar, forming an 'A'."
+        }
+    ],
+    "Paper 9 (Spatial Mastery)": [
+        # Verbal: Structural
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Inch | Foot | Yard",
+            "options": ["Meter", "Mile", "Liter", "Gram", "Weight"],
+            "answer": "Mile",
+            "explanation": "These are all Imperial units of length. 'Meter' is Metric. 'Mile' is Imperial."
+        },
+        {
+            "category": "Verbal Analogies",
+            "question": "Complete the pair: Leaf : Tree :: Petal : ______",
+            "options": ["Stem", "Root", "Flower", "Garden", "Rose"],
+            "answer": "Flower",
+            "explanation": "Part to Whole relationship. A leaf is part of a tree; a petal is part of a flower."
+        },
+        # Quant: Time & Primes
+        {
+            "category": "Number Series",
+            "question": "Time Sequence: 10:00, 10:15, 10:45, 11:30, ___",
+            "options": ["12:00", "12:15", "12:30", "13:00", "11:45"],
+            "answer": "12:30",
+            "explanation": "Increasing intervals: +15 min, +30 min, +45 min. Next is +60 min (1 hour). 11:30 + 1hr = 12:30."
+        },
+        {
+            "category": "Number Series",
+            "question": "What comes next: 2, 3, 5, 7, 11, ___",
+            "options": ["12", "13", "14", "15", "17"],
+            "answer": "13",
+            "explanation": "Sequence of Prime Numbers."
+        },
+        # Non-Verbal: 3D & XOR
+        {
+            "category": "Figure Matrices",
+            "question": "Row 1: [Vertical Line] + [Horizontal Line] -> [Cross]. Row 2: [Diagonal /] + [Diagonal \] -> [?]",
+            "options": ["X Shape", "Square", "Line", "Triangle"],
+            "answer": "X Shape",
+            "explanation": "Superposition: Combining two lines to form an intersection."
+        },
+        {
+            "category": "Figure Classification",
+            "question": "Shape 1: Cube. Shape 2: Cuboid. Shape 3: Cylinder. Which belongs?",
+            "options": ["Square", "Circle", "Cone", "Triangle"],
+            "answer": "Cone",
+            "explanation": "3D Shapes (Solids). The options Square, Circle, Triangle are 2D."
+        },
+        {
+            "category": "Figure Analysis",
+            "question": "Fold square Diagonally. Fold again to make small triangle. Punch center. Unfold.",
+            "options": ["1 Hole", "2 Holes", "4 Holes", "8 Holes"],
+            "answer": "4 Holes",
+            "explanation": "Folding twice implies 4 layers. A single punch creates 4 symmetric holes."
+        },
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Prologue | Introduction | Preface",
+            "options": ["Chapter", "Ending", "Foreword", "Index", "Title"],
+            "answer": "Foreword",
+            "explanation": "These are all introductory sections of a book."
+        },
+        {
+            "category": "Number Analogies",
+            "question": "[7 -> 50] and [8 -> 57]. Apply the same rule to [6 -> ?]",
+            "options": ["42", "43", "44", "45", "40"],
+            "answer": "43",
+            "explanation": "Rule: (x7) + 1. 6*7 = 42 + 1 = 43."
+        },
+        {
+            "category": "Figure Recognition",
+            "question": "Target: Letter 'M'. Where is it hidden?",
+            "options": ["Two Mountain Peaks", "Ocean Waves", "Square Blocks", "Circles"],
+            "answer": "Two Mountain Peaks",
+            "explanation": "The silhouette of two pointed mountains creates the zigzag 'M' shape."
+        }
+    ],
+    "Paper 10 (Challenge)": [
+        # Verbal: Abstract
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Justice | Liberty | Freedom",
+            "options": ["Law", "Court", "Equality", "Judge", "Police"],
+            "answer": "Equality",
+            "explanation": "Abstract societal values/ideals. Law/Court are institutions, not values."
+        },
+        {
+            "category": "Verbal Analogies",
+            "question": "Complete the pair: Camera : Photography :: Microscope : ______",
+            "options": ["Science", "Lab", "Biology", "Magnify", "Glass"],
+            "answer": "Biology",
+            "explanation": "Tool to Field of Study/Art. Cameras are used for Photography. Microscopes are used primarily for Biology."
+        },
+        # Quant: Complex
+        {
+            "category": "Number Series",
+            "question": "What comes next: 4, 8, 6, 12, 10, 20, ___",
+            "options": ["18", "22", "40", "16", "30"],
+            "answer": "18",
+            "explanation": "Alternating Operations: x2, -2, x2, -2... 10 * 2 = 20. 20 - 2 = 18."
+        },
+        {
+            "category": "Number Analogies",
+            "question": "[2 -> 9] and [3 -> 28]. Apply the same rule to [4 -> ?]",
+            "options": ["64", "65", "17", "30", "50"],
+            "answer": "65",
+            "explanation": "Rule: Cubes + 1 (n^3 + 1). 4^3 = 64 + 1 = 65."
+        },
+        # Non-Verbal: Rotational & Perimeter
+        {
+            "category": "Figure Matrices",
+            "question": "Row 1: [Dot Top-Left] -> [Dot Top-Right]. Row 2: [Dot Bottom-Left] -> [?]. Rule: Move clockwise along corner.",
+            "options": ["Dot Top-Left", "Dot Bottom-Right", "Dot Center", "No Dot"],
+            "answer": "Dot Bottom-Right",
+            "explanation": "Movement logic: The dot moves to the next corner clockwise."
+        },
+        {
+            "category": "Figure Classification",
+            "question": "Shape 1: 'S' shape. Shape 2: 'Z' shape. Shape 3: 'N' shape. Which belongs?",
+            "options": ["Letter 'O'", "Letter 'H'", "Letter 'C'", "Letter 'D'"],
+            "answer": "Letter 'H'",
+            "explanation": "Rotational Symmetry. S, Z, and N look the same when rotated 180 degrees. H also shares this property."
+        },
+        {
+            "category": "Figure Analysis",
+            "question": "Square Folded Diagonally. Punch hole on the folded crease (center of diagonal). Unfold.",
+            "options": ["2 Holes Center", "1 Hole Center", "4 Holes", "No Holes"],
+            "answer": "1 Hole Center",
+            "explanation": "Punching exactly on the fold line results in a single shape when unfolded (or two joined shapes appearing as one)."
+        },
+        {
+            "category": "Verbal Classification",
+            "question": "Which word belongs in the same group as: Amble | Stroll | Saunter",
+            "options": ["Run", "Sprint", "Walk", "Jump", "Hop"],
+            "answer": "Walk",
+            "explanation": "Synonyms for walking slowly/leisurely. 'Walk' is the general category verb that fits best among options (Run/Sprint are too fast)."
+        },
+        {
+            "category": "Number Series",
+            "question": "What comes next: 3, 4, 7, 11, 18, 29, ___",
+            "options": ["40", "47", "50", "35", "45"],
+            "answer": "47",
+            "explanation": "Fibonacci-style addition: 3+4=7, 4+7=11... 18+29=47."
+        },
+        {
+            "category": "Figure Recognition",
+            "question": "Target: Shape 'Diamond'. Where is it hidden?",
+            "options": ["Square Grid", "Argyle Pattern (Sweater)", "Polka Dots", "Stripes"],
+            "answer": "Argyle Pattern (Sweater)",
+            "explanation": "An Argyle pattern consists entirely of repeating diamond shapes."
+        }
     ]
 }
 
@@ -601,12 +826,15 @@ if not st.session_state.quiz_active and not st.session_state.finished:
     st.markdown("### Select a Practice Paper")
     st.info("You will have **10 minutes** to complete 10 questions.")
     
-    # Grid Layout for 7 Papers
+    # Grid Layout for 10 Papers
+    # We will use 2 columns of 5 rows for a clean list look, or a grid.
+    # Let's try a grid of 3 columns for standard, and 2 columns for advanced.
+    
+    st.markdown("#### Standard Papers")
     row1 = st.columns(3)
     row2 = st.columns(3)
-    row3 = st.columns(1)
+    row3 = st.columns(1) # For Paper 7 to sit alone or with others if we reshuffle
     
-    # Buttons Row 1
     with row1[0]:
         if st.button("Start Paper 1", use_container_width=True):
             start_quiz("Paper 1")
@@ -620,7 +848,6 @@ if not st.session_state.quiz_active and not st.session_state.finished:
             start_quiz("Paper 3")
             st.rerun()
             
-    # Buttons Row 2
     with row2[0]:
         if st.button("Start Paper 4", use_container_width=True):
             start_quiz("Paper 4")
@@ -633,11 +860,27 @@ if not st.session_state.quiz_active and not st.session_state.finished:
         if st.button("Start Paper 6 (Harder)", use_container_width=True):
             start_quiz("Paper 6 (Harder)")
             st.rerun()
+            
+    st.markdown("#### Advanced & Challenge Papers")
+    row_adv_1 = st.columns(2)
+    row_adv_2 = st.columns(2)
 
-    # Buttons Row 3 (Advanced)
-    with row3[0]:
+    with row_adv_1[0]:
         if st.button("Start Paper 7 (Advanced)", use_container_width=True):
             start_quiz("Paper 7 (Advanced)")
+            st.rerun()
+    with row_adv_1[1]:
+        if st.button("Start Paper 8 (Complex Logic)", use_container_width=True):
+            start_quiz("Paper 8 (Complex Logic)")
+            st.rerun()
+            
+    with row_adv_2[0]:
+        if st.button("Start Paper 9 (Spatial Mastery)", use_container_width=True):
+            start_quiz("Paper 9 (Spatial Mastery)")
+            st.rerun()
+    with row_adv_2[1]:
+        if st.button("Start Paper 10 (Challenge)", use_container_width=True):
+            start_quiz("Paper 10 (Challenge)")
             st.rerun()
 
 # B. QUIZ SCREEN
