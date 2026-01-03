@@ -29,6 +29,7 @@ import streamlit as st
 #   client = OpenAI(api_key=...)
 #
 # If your environment has an older "openai" package, you may need to adjust.
+
 try:
     from openai import OpenAI
 except Exception as e:
@@ -40,11 +41,7 @@ except Exception as e:
 # -----------------------------
 # Configuration
 # -----------------------------
-OPENAI_API_KEY = (
-    st.secrets.get("OPENAI_API_KEY", None)
-    if hasattr(st, "secrets")
-    else None
-) or os.getenv("OPENAI_API_KEY", "")
+OPENAI_API_KEY = "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"          # required
 
 # Keep keys as variables (as requested)
 API_KEY_VARIABLE = OPENAI_API_KEY  # use this variable for auth
