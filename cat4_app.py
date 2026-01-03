@@ -1,969 +1,506 @@
+# app.py
+# Streamlit Grade 7 Chemistry Quiz (1 question per "page") with OpenAI feedback + final summary
+#
+# Setup:
+#   pip install streamlit openai
+# Run:
+#   streamlit run app.py
+#
+# API key options:
+# 1) Environment variable:
+#    export OPENAI_API_KEY="YOUR_KEY"
+# 2) Streamlit secrets:
+#    .streamlit/secrets.toml
+#    OPENAI_API_KEY="YOUR_KEY"
+
+from __future__ import annotations
+
+import json
+import os
+import re
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Any
+
 import streamlit as st
-import time
 
-# --- 1. QUIZ DATA SETUP ---
-# We store the questions, options, and answers for 10 papers here.
+# --- OpenAI client (new-style) ---
+# If you're using the latest OpenAI python package:
+#   from openai import OpenAI
+#   client = OpenAI(api_key=...)
+#
+# If your environment has an older "openai" package, you may need to adjust.
+try:
+    from openai import OpenAI
+except Exception as e:
+    raise RuntimeError(
+        "Could not import OpenAI. Install/upgrade with: pip install -U openai"
+    ) from e
 
-PAPERS = {
-    "Paper 1": [
-        # Verbal
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Granite | Marble | Slate",
-            "options": ["Rock", "Limestone", "Hard", "Build", "Stone"],
-            "answer": "Limestone",
-            "explanation": "Granite, Marble, and Slate are specific types of rock. Limestone is also a specific type."
-        },
-        {
-            "category": "Verbal Analogies",
-            "question": "Complete the pair: Cautious : Careless :: Private : ______",
-            "options": ["General", "Public", "Secret", "Hidden", "Quiet"],
-            "answer": "Public",
-            "explanation": "Cautious is the opposite (antonym) of Careless. Private is the opposite of Public."
-        },
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Geometry | Algebra | Calculus",
-            "options": ["School", "Science", "Trigonometry", "Equations", "Difficult"],
-            "answer": "Trigonometry",
-            "explanation": "The first three are specific branches of mathematics. Trigonometry is also a specific branch."
-        },
-        # Quantitative
-        {
-            "category": "Number Analogies",
-            "question": "[12 -> 4] and [27 -> 9]. Apply the same rule to [18 -> ?]",
-            "options": ["3", "5", "6", "8", "2"],
-            "answer": "6",
-            "explanation": "The rule is divide by 3. 18 / 3 = 6."
-        },
-        {
-            "category": "Number Series",
-            "question": "What comes next: 5, 11, 23, 47, ___",
-            "options": ["94", "95", "80", "53", "105"],
-            "answer": "95",
-            "explanation": "The rule is (x2) + 1. 47 * 2 + 1 = 95."
-        },
-        {
-            "category": "Number Analogies",
-            "question": "[5 -> 24] and [7 -> 48]. Apply the same rule to [9 -> ?]",
-            "options": ["80", "81", "79", "63", "90"],
-            "answer": "80",
-            "explanation": "The rule is Square the number, then subtract 1 (n^2 - 1). 9*9 = 81 - 1 = 80."
-        },
-        # Non-Verbal
-        {
-            "category": "Figure Classification",
-            "question": "Shape 1: Square w/ horizontal line. Shape 2: Circle w/ horizontal line. Shape 3: Triangle w/ horizontal line. Which shape belongs?",
-            "options": ["Square w/ vertical line", "Hexagon w/ diagonal line", "Pentagon w/ horizontal line", "Circle w/ cross"],
-            "answer": "Pentagon w/ horizontal line",
-            "explanation": "The rule is: Any shape with a single horizontal line splitting it."
-        },
-        {
-            "category": "Figure Matrices",
-            "question": "Row 1: [Arrow Up] -> [Arrow Down]. Row 2: [Triangle Left] -> [?]",
-            "options": ["Triangle Left", "Triangle Right", "Triangle Up", "Triangle Down"],
-            "answer": "Triangle Right",
-            "explanation": "The rule is rotate 180 degrees or reverse direction."
-        },
-        {
-            "category": "Figure Analysis (Paper Folding)",
-            "question": "Fold a square diagonally (bottom-left to top-right). Punch hole in center of folded triangle. Unfolded view?",
-            "options": ["One hole center", "Two holes (Bottom-Left, Top-Right)", "Two holes (Top-Left, Bottom-Right)", "Four holes"],
-            "answer": "Two holes (Top-Left, Bottom-Right)",
-            "explanation": "Symmetry across the diagonal fold creates holes on the off-axis corners."
-        },
-        {
-            "category": "Figure Recognition",
-            "question": "Target: Perfect Circle. Where is it hidden?",
-            "options": ["Brick wall drawing", "Overlapping triangles", "Bicycle drawing", "Checkerboard"],
-            "answer": "Bicycle drawing",
-            "explanation": "Only the bicycle contains curved lines/circles."
+
+# -----------------------------
+# Configuration
+# -----------------------------
+OPENAI_API_KEY = (
+    st.secrets.get("OPENAI_API_KEY", None)
+    if hasattr(st, "secrets")
+    else None
+) or os.getenv("OPENAI_API_KEY", "")
+
+# Keep keys as variables (as requested)
+API_KEY_VARIABLE = OPENAI_API_KEY  # use this variable for auth
+
+MODEL_FEEDBACK = os.getenv("OPENAI_MODEL_FEEDBACK", "gpt-4.1-mini")  # change if you want
+MODEL_SUMMARY = os.getenv("OPENAI_MODEL_SUMMARY", "gpt-4.1-mini")
+
+TEMPERATURE_FEEDBACK = float(os.getenv("OPENAI_TEMPERATURE_FEEDBACK", "0.4"))
+TEMPERATURE_SUMMARY = float(os.getenv("OPENAI_TEMPERATURE_SUMMARY", "0.3"))
+
+
+# -----------------------------
+# Data model
+# -----------------------------
+@dataclass
+class Question:
+    id: str
+    topic: str
+    marks: int
+    prompt: str
+    answer_type: str = "text"  # could be "text" or "multiline"
+
+
+QUESTIONS: List[Question] = [
+    # Structure of atoms
+    Question("A1", "Structure of atoms", 1, "What creative idea did Democritus have about matter that led to the idea of atoms?"),
+    Question("A2", "Structure of atoms", 1, "In Rutherford’s experiment, what did he fire at a thin sheet of gold foil?"),
+    Question("A3", "Structure of atoms", 1, "What was the curved screen used for in Rutherford’s experiment?"),
+    Question("A4", "Structure of atoms", 2, "Rutherford noticed most particles passed through but a few were deflected. What did this show about (a) empty space in the atom and (b) where most mass is?"),
+    Question("A5", "Structure of atoms", 2, "How are a proton and neutron (a) similar and (b) different?"),
+    Question("A6", "Structure of atoms", 1, "Compare the electrical charge of a proton with an electron."),
+    Question("A7", "Structure of atoms", 2, "What holds electrons inside an atom? Explain simply."),
+
+    # Mixtures & impurities
+    Question("B1", "Mixtures & impurities", 2, "What is a pure substance?"),
+    Question("B2", "Mixtures & impurities", 1, "What is an impurity?"),
+    Question("B3", "Mixtures & impurities", 2, "Two reactants made a product, but the product still contained one reactant. Give two reasons how this could happen."),
+    Question("B4", "Mixtures & impurities", 2, "Why should you keep a reaction at the correct temperature for the correct amount of time (for purity/yield)?"),
+    Question("B5", "Mixtures & impurities", 1, "A salt solution has a high concentration. What does this mean?"),
+    Question("B6", "Mixtures & impurities", 2, "You pour orange juice into a larger glass of water. (a) What happens to the colour? (b) Explain why."),
+
+    # Reactivity of metals
+    Question("C1", "Reactivity of metals", 1, "Why is sodium kept under oil?"),
+    Question("C2", "Reactivity of metals", 1, "What happens to copper when it is heated strongly in oxygen?"),
+    Question("C3", "Reactivity of metals", 1, "What happens to gold when it is heated in oxygen?"),
+    Question("C4", "Reactivity of metals", 1, "If a metal reacts with oxygen, what is the product called (general name)?"),
+    Question("C5", "Reactivity of metals", 2, "If a metal reacts with cold water, what are the usual products?"),
+    Question("C6", "Reactivity of metals", 1, "Name two metals that float on water."),
+    Question("C7", "Reactivity of metals", 1, "What is phenolphthalein and what is it used for when testing metals with water?"),
+    Question("C8", "Reactivity of metals", 2, "What is the purpose of the reactivity series and what tests are used to set it up? (Name at least two tests.)"),
+
+    # Exothermic & endothermic
+    Question("D1", "Exothermic & endothermic reactions", 1, "If something is on fire, what chemical reaction is taking place?"),
+    Question("D2", "Exothermic & endothermic reactions", 2, "State three examples of a fuel."),
+    Question("D3", "Exothermic & endothermic reactions", 1, "What are fuels used for?"),
+    Question("D4", "Exothermic & endothermic reactions", 2, "Describe how you could use a beaker of water and a thermometer to show burning fuel is exothermic."),
+    Question("D5", "Exothermic & endothermic reactions", 1, "What exothermic reaction happens in our bodies to keep us warm?"),
+    Question("D6", "Exothermic & endothermic reactions", 1, "When you eat sherbet, why does it feel cool?"),
+    Question("D7", "Exothermic & endothermic reactions", 2, "What kind of reaction occurs in (a) the fuel when cooking food and (b) the food as it cooks?"),
+    Question("D8", "Exothermic & endothermic reactions", 2, "Explain what happens when an instant ice pack is squeezed, and how it helps an injury."),
+]
+
+
+# -----------------------------
+# Helpers
+# -----------------------------
+@st.cache_resource
+def get_openai_client(api_key: str) -> OpenAI:
+    if not api_key:
+        raise RuntimeError("Missing OPENAI_API_KEY. Set it in env var or Streamlit secrets.")
+    return OpenAI(api_key=api_key)
+
+
+def youtube_search_link(query: str) -> str:
+    # Simple link that doesn't require any external API
+    q = re.sub(r"\s+", "+", query.strip())
+    return f"https://www.youtube.com/results?search_query={q}"
+
+
+def safe_json_loads(text: str) -> Optional[Dict[str, Any]]:
+    try:
+        return json.loads(text)
+    except Exception:
+        return None
+
+
+def call_openai_for_feedback(
+    client: OpenAI,
+    question: Question,
+    student_answer: str,
+    grade_level: str = "Grade 7 Cambridge",
+) -> Dict[str, Any]:
+    """
+    Returns a dict with:
+      - verdict (Correct / Partly correct / Incorrect)
+      - score_band (0..marks)
+      - feedback (short)
+      - model_answer (ideal answer)
+      - misconceptions (list)
+      - next_steps (list)
+      - video_queries (list)
+      - video_links (list)
+    """
+    system = (
+        "You are a strict but supportive Cambridge lower-secondary science teacher. "
+        "Give accurate chemistry explanations for Grade 7. "
+        "Be clear, step-by-step, and correct misconceptions. "
+        "Do NOT assume the student has prior knowledge beyond Grade 7."
+    )
+
+    # Ask for JSON so the app can display reliably.
+    # (Models usually comply; we also handle non-JSON as fallback.)
+    user = f"""
+Create feedback for a student.
+
+Context:
+- Level: {grade_level}
+- Topic: {question.topic}
+- Question ({question.id}, {question.marks} marks): {question.prompt}
+- Student answer: {student_answer}
+
+Output MUST be valid JSON with exactly these keys:
+{{
+  "verdict": "Correct|Partly correct|Incorrect",
+  "score_band": "0-{question.marks} (integer as string)",
+  "feedback": "Brief, supportive feedback in 3-6 lines",
+  "model_answer": "A clear, exam-style ideal answer",
+  "why": "Detailed explanation suitable for Grade 7, step-by-step",
+  "misconceptions": ["..."],
+  "next_steps": ["..."],
+  "video_queries": ["3-5 YouTube search queries the student can use"]
+}}
+
+Rules:
+- Keep the model answer concise but complete for the marks.
+- In 'why', explain the science in detail but in simple language.
+- If the student is wrong, correct them clearly and kindly.
+- video_queries should be specific (e.g., 'Rutherford gold foil experiment explained for kids').
+""".strip()
+
+    resp = client.chat.completions.create(
+        model=MODEL_FEEDBACK,
+        temperature=TEMPERATURE_FEEDBACK,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+
+    content = resp.choices[0].message.content or ""
+    parsed = safe_json_loads(content)
+
+    if not parsed:
+        # Fallback: wrap raw text into a minimal structure
+        parsed = {
+            "verdict": "Partly correct",
+            "score_band": "0",
+            "feedback": "Feedback could not be parsed as JSON. Showing raw response below.",
+            "model_answer": "",
+            "why": content,
+            "misconceptions": [],
+            "next_steps": [],
+            "video_queries": [],
         }
-    ],
-    "Paper 2": [
-        # Verbal
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Sofa | Stool | Armchair",
-            "options": ["Cushion", "Seat", "Bench", "Wood", "Relax"],
-            "answer": "Bench",
-            "explanation": "Sofa, Stool, and Armchair are types of furniture you sit on. Bench is also furniture you sit on."
-        },
-        {
-            "category": "Verbal Analogies",
-            "question": "Complete the pair: Expand : Contract :: Ascend : ______",
-            "options": ["Rise", "Descend", "Height", "Mountain", "Climb"],
-            "answer": "Descend",
-            "explanation": "Expand/Contract are antonyms. Ascend/Descend are antonyms."
-        },
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Jupiter | Mars | Venus",
-            "options": ["Star", "Space", "Saturn", "Galaxy", "Moon"],
-            "answer": "Saturn",
-            "explanation": "These are specific planets in our solar system."
-        },
-        # Quantitative
-        {
-            "category": "Number Analogies",
-            "question": "[6 -> 11] and [8 -> 15]. Apply rule to [10 -> ?]",
-            "options": ["18", "21", "19", "20", "22"],
-            "answer": "19",
-            "explanation": "Rule: (x2) - 1. 10 * 2 = 20 - 1 = 19."
-        },
-        {
-            "category": "Number Series",
-            "question": "What comes next: 81, 64, 49, 36, ___",
-            "options": ["24", "30", "25", "27", "16"],
-            "answer": "25",
-            "explanation": "Descending squares: 9^2, 8^2, 7^2, 6^2. Next is 5^2 (25)."
-        },
-        {
-            "category": "Number Analogies",
-            "question": "[4 -> 20] and [5 -> 30]. Apply rule to [9 -> ?]",
-            "options": ["90", "72", "45", "81", "100"],
-            "answer": "90",
-            "explanation": "Rule: Multiply by the next integer (n * (n+1)). 9 * 10 = 90."
-        },
-        # Non-Verbal
-        {
-            "category": "Figure Classification",
-            "question": "Shape 1: Shield Down. Shape 2: Heart Down. Shape 3: Arrow Down. Which belongs?",
-            "options": ["Triangle Up", "Diamond", "Pentagon Down", "Circle"],
-            "answer": "Pentagon Down",
-            "explanation": "All shapes must be pointing downwards."
-        },
-        {
-            "category": "Figure Matrices",
-            "question": "Row 1: [1 Black Circle] -> [3 White Circles]. Row 2: [1 Black Square] -> [?]",
-            "options": ["3 Black Squares", "1 White Square", "3 White Squares", "2 White Squares"],
-            "answer": "3 White Squares",
-            "explanation": "Rule: Triple the shape count and invert color (Black to White)."
-        },
-        {
-            "category": "Figure Analysis",
-            "question": "Fold square Left-to-Right. Punch hole Top-Left of folded shape. Unfold?",
-            "options": ["Two holes near Top-Center", "Top-Left and Bottom-Left", "Center", "Top-Right and Bottom-Right"],
-            "answer": "Two holes near Top-Center",
-            "explanation": "Punching the top-left of the folded strip (which is the crease) creates a mirrored pair at the top center."
-        },
-        {
-            "category": "Figure Recognition",
-            "question": "Target: Equilateral Triangle. Where is it hidden?",
-            "options": ["Square Window", "5-Pointed Star", "Staircase", "Crescent Moon"],
-            "answer": "5-Pointed Star",
-            "explanation": "The points of a standard star are small equilateral triangles."
+
+    # Add clickable links from video_queries
+    vqs = parsed.get("video_queries", []) or []
+    parsed["video_links"] = [{"query": q, "url": youtube_search_link(q)} for q in vqs[:6]]
+
+    return parsed
+
+
+def call_openai_for_final_summary(
+    client: OpenAI,
+    qa_log: List[Dict[str, Any]],
+    grade_level: str = "Grade 7 Cambridge",
+) -> Dict[str, Any]:
+    """
+    Returns a dict with:
+      - overall_summary
+      - strengths
+      - gaps
+      - misconceptions_to_fix
+      - key_learning_points
+      - recommended_next_topics
+      - next_question_set_prompt (prompt-friendly)
+      - suggested_question_blueprint (structured)
+    """
+    system = (
+        "You are an expert Cambridge science tutor and assessment designer. "
+        "You will analyze student responses and produce a compact, actionable learning plan "
+        "AND a prompt-friendly specification for generating the next question set."
+    )
+
+    user = f"""
+Analyze the student's full quiz attempt and produce a summary for {grade_level}.
+
+Here is the attempt log as JSON:
+{json.dumps(qa_log, ensure_ascii=False, indent=2)}
+
+Output MUST be valid JSON with exactly these keys:
+{{
+  "overall_summary": "3-6 lines, plain language",
+  "strengths": ["..."],
+  "gaps": ["..."],
+  "misconceptions_to_fix": ["..."],
+  "key_learning_points": ["..."],
+  "recommended_next_topics": ["..."],
+  "suggested_question_blueprint": {{
+     "num_questions": 10,
+     "mix": {{
+        "recall": 3,
+        "explain_reasoning": 4,
+        "apply_to_context": 3
+     }},
+     "topics": [
+        {{
+          "topic": "string",
+          "focus_skills": ["string"],
+          "common_traps": ["string"],
+          "example_question_stems": ["string"]
+        }}
+     ]
+  }},
+  "next_question_set_prompt": "A single prompt the teacher can paste into an LLM to generate the next set of questions, including constraints, difficulty, topic focus, and marking guidance."
+}}
+
+Rules:
+- Be specific: reference patterns in the student's answers (e.g., 'confuses concentration with amount').
+- Keep next_question_set_prompt highly usable: include level, tone, format (Cambridge), and require markscheme hints.
+""".strip()
+
+    resp = client.chat.completions.create(
+        model=MODEL_SUMMARY,
+        temperature=TEMPERATURE_SUMMARY,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+
+    content = resp.choices[0].message.content or ""
+    parsed = safe_json_loads(content)
+
+    if not parsed:
+        parsed = {
+            "overall_summary": "Summary could not be parsed as JSON. Raw output provided.",
+            "strengths": [],
+            "gaps": [],
+            "misconceptions_to_fix": [],
+            "key_learning_points": [],
+            "recommended_next_topics": [],
+            "suggested_question_blueprint": {},
+            "next_question_set_prompt": "",
+            "raw": content,
         }
-    ],
-    "Paper 3": [
-        # Verbal
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Apple | Pear | Banana",
-            "options": ["Carrot", "Tomato", "Orange", "Potato", "Lettuce"],
-            "answer": "Orange",
-            "explanation": "Apple, Pear, and Banana are all fruits. Orange is also a fruit. The others are vegetables."
-        },
-        {
-            "category": "Verbal Analogies",
-            "question": "Complete the pair: Day : Night :: Summer : ______",
-            "options": ["Spring", "Autumn", "Winter", "Sun", "Cold"],
-            "answer": "Winter",
-            "explanation": "Day is the opposite of Night. Summer is the opposite season to Winter."
-        },
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Football | Rugby | Hockey",
-            "options": ["Swimming", "Running", "Tennis", "Cycling", "Gymnastics"],
-            "answer": "Tennis",
-            "explanation": "These are all sports played with a ball or object (puck/ball) and involve teams/matches. Tennis fits best."
-        },
-        # Quantitative
-        {
-            "category": "Number Analogies",
-            "question": "[3 -> 12] and [5 -> 20]. Apply the same rule to [7 -> ?]",
-            "options": ["21", "28", "30", "35", "14"],
-            "answer": "28",
-            "explanation": "Rule: Multiply by 4. 7 * 4 = 28."
-        },
-        {
-            "category": "Number Series",
-            "question": "What comes next: 2, 4, 8, 16, ___",
-            "options": ["24", "32", "30", "20", "48"],
-            "answer": "32",
-            "explanation": "Doubling pattern: x2. 16 * 2 = 32."
-        },
-        {
-            "category": "Number Analogies",
-            "question": "[10 -> 5] and [20 -> 10]. Apply the same rule to [50 -> ?]",
-            "options": ["25", "100", "40", "30", "15"],
-            "answer": "25",
-            "explanation": "Rule: Divide by 2. 50 / 2 = 25."
-        },
-        # Non-Verbal
-        {
-            "category": "Figure Classification",
-            "question": "Shape 1: Triangle. Shape 2: Square. Shape 3: Pentagon. Which belongs?",
-            "options": ["Circle", "Hexagon", "Crescent", "Line"],
-            "answer": "Hexagon",
-            "explanation": "All are regular polygons with increasing sides (3, 4, 5). Hexagon (6) fits the category of polygons."
-        },
-        {
-            "category": "Figure Matrices",
-            "question": "Row 1: [Circle] -> [Circle + Dot]. Row 2: [Square] -> [?]",
-            "options": ["Square", "Square + Dot", "Circle + Dot", "Triangle"],
-            "answer": "Square + Dot",
-            "explanation": "Rule: Add a dot to the center of the shape."
-        },
-        {
-            "category": "Figure Analysis (Paper Folding)",
-            "question": "Fold square horizontal (Top to Bottom). Punch hole Bottom-Right. Unfold?",
-            "options": ["Top-Right only", "Bottom-Right only", "Bottom-Right & Top-Right", "Four Corners"],
-            "answer": "Bottom-Right & Top-Right",
-            "explanation": "The horizontal fold mirrors the bottom-right hole to the top-right."
-        },
-        {
-            "category": "Figure Recognition",
-            "question": "Target: Letter 'Z'. Where is it hidden?",
-            "options": ["Grid of squares", "Zig-zag line pattern", "Overlapping circles", "Triangle mesh"],
-            "answer": "Zig-zag line pattern",
-            "explanation": "A zig-zag pattern contains the sharp angles and lines to form a 'Z'."
-        }
-    ],
-    "Paper 4": [
-        # Verbal
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Iron | Copper | Zinc",
-            "options": ["Water", "Lead", "Wood", "Plastic", "Gas"],
-            "answer": "Lead",
-            "explanation": "Iron, Copper, and Zinc are metals. Lead is also a metal."
-        },
-        {
-            "category": "Verbal Analogies",
-            "question": "Complete the pair: Doctor : Hospital :: Teacher : ______",
-            "options": ["Study", "Book", "School", "Student", "Class"],
-            "answer": "School",
-            "explanation": "A Doctor works in a Hospital. A Teacher works in a School."
-        },
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Happy | Joyful | Cheerful",
-            "options": ["Sad", "Angry", "Glad", "Bored", "Tired"],
-            "answer": "Glad",
-            "explanation": "These are all synonyms for happiness. Glad is also a synonym."
-        },
-        # Quantitative
-        {
-            "category": "Number Analogies",
-            "question": "[11 -> 13] and [15 -> 17]. Apply the same rule to [20 -> ?]",
-            "options": ["21", "22", "23", "25", "24"],
-            "answer": "22",
-            "explanation": "Rule: Add 2. 20 + 2 = 22."
-        },
-        {
-            "category": "Number Series",
-            "question": "What comes next: 100, 90, 80, 70, ___",
-            "options": ["50", "65", "60", "55", "40"],
-            "answer": "60",
-            "explanation": "Subtract 10 pattern. 70 - 10 = 60."
-        },
-        {
-            "category": "Number Analogies",
-            "question": "[4 -> 16] and [3 -> 9]. Apply the same rule to [6 -> ?]",
-            "options": ["12", "30", "36", "42", "24"],
-            "answer": "36",
-            "explanation": "Rule: Square the number. 6 * 6 = 36."
-        },
-        # Non-Verbal
-        {
-            "category": "Figure Classification",
-            "question": "Shape 1: Dotted Circle. Shape 2: Dotted Square. Shape 3: Dotted Triangle. Which belongs?",
-            "options": ["Solid Star", "Dotted Star", "Solid Hexagon", "Striped Circle"],
-            "answer": "Dotted Star",
-            "explanation": "The common feature is the dotted outline."
-        },
-        {
-            "category": "Figure Matrices",
-            "question": "Row 1: [Vertical Line] -> [Horizontal Line]. Row 2: [Vertical Arrow] -> [?]",
-            "options": ["Vertical Arrow", "Diagonal Arrow", "Horizontal Arrow", "Cross"],
-            "answer": "Horizontal Arrow",
-            "explanation": "Rule: Rotate 90 degrees."
-        },
-        {
-            "category": "Figure Analysis",
-            "question": "Fold square Diagonally. Punch hole on the folded crease (Top Left). Unfold?",
-            "options": ["One hole in center", "Two holes corners", "Four holes", "No holes"],
-            "answer": "One hole in center",
-            "explanation": "Punching exactly on the fold line results in a single hole (or joined holes) in the center when unfolded."
-        },
-        {
-            "category": "Figure Recognition",
-            "question": "Target: Letter 'T'. Where is it hidden?",
-            "options": ["Curve pattern", "Hexagonal grid", "Square grid pattern", "Spiral"],
-            "answer": "Square grid pattern",
-            "explanation": "A square grid contains perpendicular lines that form a 'T'."
-        }
-    ],
-    "Paper 5": [
-        # Verbal
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Oak | Elm | Pine",
-            "options": ["Rose", "Ash", "Grass", "Leaf", "Bark"],
-            "answer": "Ash",
-            "explanation": "Oak, Elm, and Pine are types of trees. Ash is also a tree."
-        },
-        {
-            "category": "Verbal Analogies",
-            "question": "Complete the pair: Puppy : Dog :: Kitten : ______",
-            "options": ["Cat", "Mouse", "Pet", "Fur", "Animal"],
-            "answer": "Cat",
-            "explanation": "Puppy is the young of a Dog. Kitten is the young of a Cat."
-        },
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Car | Bus | Truck",
-            "options": ["Boat", "Plane", "Van", "Train", "Rocket"],
-            "answer": "Van",
-            "explanation": "These are all motor vehicles that travel on roads. Van is also a road vehicle."
-        },
-        # Quantitative
-        {
-            "category": "Number Analogies",
-            "question": "[2 -> 5] and [3 -> 7]. Apply the same rule to [5 -> ?]",
-            "options": ["10", "11", "9", "12", "15"],
-            "answer": "11",
-            "explanation": "Rule: (x2) + 1. 5 * 2 + 1 = 11."
-        },
-        {
-            "category": "Number Series",
-            "question": "What comes next: 1, 2, 4, 7, 11, ___",
-            "options": ["15", "16", "14", "18", "20"],
-            "answer": "16",
-            "explanation": "Pattern increases by +1, +2, +3, +4. Next is +5. 11 + 5 = 16."
-        },
-        {
-            "category": "Number Analogies",
-            "question": "[100 -> 10] and [81 -> 9]. Apply the same rule to [49 -> ?]",
-            "options": ["7", "8", "6", "14", "24"],
-            "answer": "7",
-            "explanation": "Rule: Square Root. Sqrt(49) = 7."
-        },
-        # Non-Verbal
-        {
-            "category": "Figure Classification",
-            "question": "Shape 1: Black Circle. Shape 2: Black Square. Shape 3: Black Triangle. Which belongs?",
-            "options": ["White Circle", "Black Star", "Striped Square", "Grey Oval"],
-            "answer": "Black Star",
-            "explanation": "The common feature is that the shape is solid black (Shading)."
-        },
-        {
-            "category": "Figure Matrices",
-            "question": "Row 1: [Square with X] -> [Square]. Row 2: [Circle with X] -> [?]",
-            "options": ["Circle with X", "Circle", "Square", "Triangle"],
-            "answer": "Circle",
-            "explanation": "Rule: Remove the 'X' from inside the shape."
-        },
-        {
-            "category": "Figure Analysis",
-            "question": "Fold square Top-to-Bottom. Then fold Left-to-Right. Punch Center. Unfold?",
-            "options": ["1 hole", "2 holes", "4 holes", "8 holes"],
-            "answer": "4 holes",
-            "explanation": "Folding twice creates 4 layers. Punching once through 4 layers creates 4 holes."
-        },
-        {
-            "category": "Figure Recognition",
-            "question": "Target: Letter 'U'. Where is it hidden?",
-            "options": ["Triangle grid", "Straight lines", "Chain link pattern", "Dot matrix"],
-            "answer": "Chain link pattern",
-            "explanation": "A chain link pattern contains curved loops that look like 'U'."
-        }
-    ],
-    "Paper 6 (Harder)": [
-        # Verbal (Nuanced & Scientific)
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Transparent | Translucent | Opaque",
-            "options": ["See-through", "Solid", "Reflective", "Shiny", "Clear"],
-            "answer": "Reflective",
-            "explanation": "These are all properties of how materials interact with light (Optical properties). 'Reflective' fits this category better than 'Solid' (state of matter) or 'Clear' (which is a synonym for Transparent)."
-        },
-        {
-            "category": "Verbal Analogies",
-            "question": "Complete the pair: Fragile : Break :: Elastic : ______",
-            "options": ["Bend", "Stretch", "Rubber", "Snap", "Hard"],
-            "answer": "Stretch",
-            "explanation": "Fragile describes something prone to Breaking. Elastic describes something prone to Stretching."
-        },
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Generous | Benevolent | Charitable",
-            "options": ["Happy", "Rich", "Philanthropic", "Friendly", "Spending"],
-            "answer": "Philanthropic",
-            "explanation": "These words describe the act of giving to others. 'Philanthropic' is the closest formal synonym."
-        },
-        # Quantitative (Alternating & Complex)
-        {
-            "category": "Number Series",
-            "question": "What comes next: 2, 10, 4, 20, 6, 30, ___",
-            "options": ["8", "12", "40", "36", "60"],
-            "answer": "8",
-            "explanation": "This is an interleaved series. Series A: 2, 4, 6... (Next is 8). Series B: 10, 20, 30..."
-        },
-        {
-            "category": "Number Analogies",
-            "question": "[8 -> 3] and [12 -> 5]. Apply the same rule to [20 -> ?]",
-            "options": ["9", "10", "8", "7", "11"],
-            "answer": "9",
-            "explanation": "Rule: Halve the number, then subtract 1. (8/2)-1=3. (20/2)-1=9."
-        },
-        {
-            "category": "Number Series",
-            "question": "What comes next: 50, 45, 41, 38, 36, ___",
-            "options": ["35", "34", "33", "30", "32"],
-            "answer": "35",
-            "explanation": "Subtract descending integers: -5, -4, -3, -2. Next is -1. 36 - 1 = 35."
-        },
-        # Non-Verbal (Conditional & Logic)
-        {
-            "category": "Figure Classification",
-            "question": "Shape 1: 3-sided shape (Black). Shape 2: 4-sided shape (White). Shape 3: 5-sided shape (Black). Rule: Odd sides are Black, Even sides are White. Which belongs?",
-            "options": ["6-sided (Black)", "6-sided (White)", "3-sided (White)", "4-sided (Black)"],
-            "answer": "6-sided (White)",
-            "explanation": "Logic: Even number of sides (6) must be White."
-        },
-        {
-            "category": "Figure Matrices",
-            "question": "Row 1: [Circle] -> [Square]. Row 2: [Triangle] -> [?]. Rule: Add 1 side.",
-            "options": ["Pentagon", "Square", "Hexagon", "Circle"],
-            "answer": "Square",
-            "explanation": "Circle (1 curve) -> Square (4) is not a clear add 1. Let's re-evaluate: Triangle (3) -> Square (4) is add 1 side."
-        },
-        {
-            "category": "Figure Analysis",
-            "question": "Square folded twice (Quarter size). Punch Hole through ALL layers in the Center. Unfold.",
-            "options": ["1 Central Hole", "4 Central Holes", "4 Corner Holes", "2 Side Holes"],
-            "answer": "4 Central Holes",
-            "explanation": "Punching the center of a quarter-folded square means you punch near the 'folded corner' which is the center of the original paper. This creates 4 holes huddled in the center."
-        },
-        {
-            "category": "Figure Recognition",
-            "question": "Target: Number '4'. Where is it hidden?",
-            "options": ["Circle patterns", "Triangle grid", "Overlapping squares", "A flag drawing"],
-            "answer": "Triangle grid",
-            "explanation": "The number 4 is composed of a triangle on a vertical stick. A grid of triangles contains this geometry."
-        }
-    ],
-    "Paper 7 (Advanced)": [
-        # Verbal
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Rain | Hail | Snow",
-            "options": ["Cloud", "Sleet", "Storm", "Water", "Cold"],
-            "answer": "Sleet",
-            "explanation": "These are all forms of precipitation. Sleet is another form."
-        },
-        {
-            "category": "Verbal Analogies",
-            "question": "Complete the pair: Solar : Sun :: Lunar : ______",
-            "options": ["Planet", "Star", "Moon", "Sky", "Space"],
-            "answer": "Moon",
-            "explanation": "Solar relates to the Sun. Lunar relates to the Moon."
-        },
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Biology | Chemistry | Physics",
-            "options": ["History", "Botany", "Literature", "Geography", "Art"],
-            "answer": "Botany",
-            "explanation": "These are natural sciences. Botany (study of plants) is a sub-branch of Biology/Science."
-        },
-        # Quantitative
-        {
-            "category": "Number Series",
-            "question": "What comes next: 1, 1, 2, 3, 5, 8, ___",
-            "options": ["10", "12", "13", "15", "11"],
-            "answer": "13",
-            "explanation": "Fibonacci Sequence: Add the previous two numbers. 5 + 8 = 13."
-        },
-        {
-            "category": "Number Analogies",
-            "question": "[4 -> 0.5] and [8 -> 1]. Apply the same rule to [20 -> ?]",
-            "options": ["2", "2.5", "5", "10", "1.5"],
-            "answer": "2.5",
-            "explanation": "Rule: Divide by 8. 4/8=0.5, 8/8=1, 20/8=2.5."
-        },
-        {
-            "category": "Number Series",
-            "question": "What comes next: 3, 6, 12, 24, ___",
-            "options": ["36", "40", "48", "30", "50"],
-            "answer": "48",
-            "explanation": "Rule: Multiply by 2 (Doubling). 24 * 2 = 48."
-        },
-        # Non-Verbal
-        {
-            "category": "Figure Classification",
-            "question": "Shape 1: Clock at 3:00. Shape 2: Clock at 9:00. Shape 3: Letter 'T'. Which belongs?",
-            "options": ["Letter 'L'", "Letter 'V'", "Letter 'K'", "Clock at 2:00"],
-            "answer": "Letter 'L'",
-            "explanation": "The common feature is a 90-degree (Right) Angle."
-        },
-        {
-            "category": "Figure Matrices",
-            "question": "Row 1: [Square] -> [Cube]. Row 2: [Triangle] -> [?]",
-            "options": ["Pyramid", "Square", "Circle", "Cylinder"],
-            "answer": "Pyramid",
-            "explanation": "Rule: 2D shape becomes its 3D counterpart. Triangle becomes Pyramid (or Tetrahedron)."
-        },
-        {
-            "category": "Figure Analysis",
-            "question": "Fold square Diagonally. Punch hole in the hypotenuse (long edge). Unfold.",
-            "options": ["2 holes on edges", "2 holes in center", "1 hole", "4 holes"],
-            "answer": "2 holes on edges",
-            "explanation": "The hypotenuse of the folded triangle is the diagonal of the square. Punching it creates holes on the diagonal line."
-        },
-        {
-            "category": "Figure Recognition",
-            "question": "Target: Letter 'X'. Where is it hidden?",
-            "options": ["Parallel lines", "Diamond Grid", "Circles", "Waves"],
-            "answer": "Diamond Grid",
-            "explanation": "A diamond grid is formed by intersecting diagonal lines, which create many 'X' shapes."
-        }
-    ],
-    "Paper 8 (Complex Logic)": [
-        # Verbal: Degree of Intensity & Function
-        {
-            "category": "Verbal Analogies",
-            "question": "Complete the pair: Cool : Cold :: Warm : ______",
-            "options": ["Tepid", "Hot", "Boiling", "Freezing", "Heat"],
-            "answer": "Hot",
-            "explanation": "Degree of intensity. 'Cold' is a stronger version of 'Cool'. 'Hot' is the stronger version of 'Warm'."
-        },
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Anxiety | Fear | Panic",
-            "options": ["Bravery", "Terror", "Calm", "Sleep", "Emotion"],
-            "answer": "Terror",
-            "explanation": "These are all words describing increasing levels of fear/negative emotion. Terror fits this category."
-        },
-        # Quantitative: Ratios and Decimals
-        {
-            "category": "Number Series",
-            "question": "What comes next: 0.2, 0.4, 0.8, 1.6, ___",
-            "options": ["2.4", "3.0", "3.2", "1.8", "2.0"],
-            "answer": "3.2",
-            "explanation": "Doubling pattern with decimals. 1.6 * 2 = 3.2."
-        },
-        {
-            "category": "Number Analogies",
-            "question": "[4 -> 12] and [6 -> 18]. Apply the same rule to [15 -> ?]",
-            "options": ["30", "45", "60", "20", "25"],
-            "answer": "45",
-            "explanation": "Rule: Multiply by 3. 15 * 3 = 45."
-        },
-        # Non-Verbal: Shape Addition & Intersections
-        {
-            "category": "Figure Matrices",
-            "question": "Row 1: [Left Half Circle] + [Right Half Circle] -> [Full Circle]. Row 2: [Top Half Square] + [?] -> [Full Square].",
-            "options": ["Bottom Half Square", "Top Half Square", "Full Square", "Circle"],
-            "answer": "Bottom Half Square",
-            "explanation": "Addition Logic: Part A + Part B = Complete Shape."
-        },
-        {
-            "category": "Figure Classification",
-            "question": "Shape 1: Two intersecting Circles. Shape 2: Two intersecting Triangles. Shape 3: Two intersecting Squares. Which belongs?",
-            "options": ["One Circle", "Two separated Circles", "Two intersecting Ovals", "Three Circles"],
-            "answer": "Two intersecting Ovals",
-            "explanation": "The rule is 'Two identical shapes intersecting'."
-        },
-        {
-            "category": "Figure Analysis",
-            "question": "Square folded in half (Rect). Folded again (Square). Punch hole in Top Right. Unfold.",
-            "options": ["1 Hole Top Right", "4 Holes (Corners)", "2 Holes (Top)", "1 Hole Center"],
-            "answer": "4 Holes (Corners)",
-            "explanation": "Punching the open corner of a double-folded square affects all 4 outer corners of the original paper."
-        },
-        {
-            "category": "Verbal Analogies",
-            "question": "Complete the pair: Chisel : Sculptor :: Scalpel : ______",
-            "options": ["Artist", "Surgeon", "Doctor", "Hospital", "Nurse"],
-            "answer": "Surgeon",
-            "explanation": "Tool to Professional relationship. A chisel is the primary tool of a sculptor; a scalpel is the primary tool of a surgeon."
-        },
-        {
-            "category": "Number Series",
-            "question": "What comes next: 1/2, 1/4, 1/8, 1/16, ___",
-            "options": ["1/20", "1/24", "1/32", "1/18", "0"],
-            "answer": "1/32",
-            "explanation": "Halving the fraction each time (Denominator multiplies by 2)."
-        },
-        {
-            "category": "Figure Recognition",
-            "question": "Target: Letter 'A'. Where is it hidden?",
-            "options": ["Pentagon Star", "Square Grid", "Circles", "Waves"],
-            "answer": "Pentagon Star",
-            "explanation": "The top point of a 5-pointed star contains the 'V' shape with a horizontal bar, forming an 'A'."
-        }
-    ],
-    "Paper 9 (Spatial Mastery)": [
-        # Verbal: Structural
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Inch | Foot | Yard",
-            "options": ["Meter", "Mile", "Liter", "Gram", "Weight"],
-            "answer": "Mile",
-            "explanation": "These are all Imperial units of length. 'Meter' is Metric. 'Mile' is Imperial."
-        },
-        {
-            "category": "Verbal Analogies",
-            "question": "Complete the pair: Leaf : Tree :: Petal : ______",
-            "options": ["Stem", "Root", "Flower", "Garden", "Rose"],
-            "answer": "Flower",
-            "explanation": "Part to Whole relationship. A leaf is part of a tree; a petal is part of a flower."
-        },
-        # Quant: Time & Primes
-        {
-            "category": "Number Series",
-            "question": "Time Sequence: 10:00, 10:15, 10:45, 11:30, ___",
-            "options": ["12:00", "12:15", "12:30", "13:00", "11:45"],
-            "answer": "12:30",
-            "explanation": "Increasing intervals: +15 min, +30 min, +45 min. Next is +60 min (1 hour). 11:30 + 1hr = 12:30."
-        },
-        {
-            "category": "Number Series",
-            "question": "What comes next: 2, 3, 5, 7, 11, ___",
-            "options": ["12", "13", "14", "15", "17"],
-            "answer": "13",
-            "explanation": "Sequence of Prime Numbers."
-        },
-        # Non-Verbal: 3D & XOR
-        {
-            "category": "Figure Matrices",
-            "question": "Row 1: [Vertical Line] + [Horizontal Line] -> [Cross]. Row 2: [Diagonal /] + [Diagonal \] -> [?]",
-            "options": ["X Shape", "Square", "Line", "Triangle"],
-            "answer": "X Shape",
-            "explanation": "Superposition: Combining two lines to form an intersection."
-        },
-        {
-            "category": "Figure Classification",
-            "question": "Shape 1: Cube. Shape 2: Cuboid. Shape 3: Cylinder. Which belongs?",
-            "options": ["Square", "Circle", "Cone", "Triangle"],
-            "answer": "Cone",
-            "explanation": "3D Shapes (Solids). The options Square, Circle, Triangle are 2D."
-        },
-        {
-            "category": "Figure Analysis",
-            "question": "Fold square Diagonally. Fold again to make small triangle. Punch center. Unfold.",
-            "options": ["1 Hole", "2 Holes", "4 Holes", "8 Holes"],
-            "answer": "4 Holes",
-            "explanation": "Folding twice implies 4 layers. A single punch creates 4 symmetric holes."
-        },
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Prologue | Introduction | Preface",
-            "options": ["Chapter", "Ending", "Foreword", "Index", "Title"],
-            "answer": "Foreword",
-            "explanation": "These are all introductory sections of a book."
-        },
-        {
-            "category": "Number Analogies",
-            "question": "[7 -> 50] and [8 -> 57]. Apply the same rule to [6 -> ?]",
-            "options": ["42", "43", "44", "45", "40"],
-            "answer": "43",
-            "explanation": "Rule: (x7) + 1. 6*7 = 42 + 1 = 43."
-        },
-        {
-            "category": "Figure Recognition",
-            "question": "Target: Letter 'M'. Where is it hidden?",
-            "options": ["Two Mountain Peaks", "Ocean Waves", "Square Blocks", "Circles"],
-            "answer": "Two Mountain Peaks",
-            "explanation": "The silhouette of two pointed mountains creates the zigzag 'M' shape."
-        }
-    ],
-    "Paper 10 (Challenge)": [
-        # Verbal: Abstract
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Justice | Liberty | Freedom",
-            "options": ["Law", "Court", "Equality", "Judge", "Police"],
-            "answer": "Equality",
-            "explanation": "Abstract societal values/ideals. Law/Court are institutions, not values."
-        },
-        {
-            "category": "Verbal Analogies",
-            "question": "Complete the pair: Camera : Photography :: Microscope : ______",
-            "options": ["Science", "Lab", "Biology", "Magnify", "Glass"],
-            "answer": "Biology",
-            "explanation": "Tool to Field of Study/Art. Cameras are used for Photography. Microscopes are used primarily for Biology."
-        },
-        # Quant: Complex
-        {
-            "category": "Number Series",
-            "question": "What comes next: 4, 8, 6, 12, 10, 20, ___",
-            "options": ["18", "22", "40", "16", "30"],
-            "answer": "18",
-            "explanation": "Alternating Operations: x2, -2, x2, -2... 10 * 2 = 20. 20 - 2 = 18."
-        },
-        {
-            "category": "Number Analogies",
-            "question": "[2 -> 9] and [3 -> 28]. Apply the same rule to [4 -> ?]",
-            "options": ["64", "65", "17", "30", "50"],
-            "answer": "65",
-            "explanation": "Rule: Cubes + 1 (n^3 + 1). 4^3 = 64 + 1 = 65."
-        },
-        # Non-Verbal: Rotational & Perimeter
-        {
-            "category": "Figure Matrices",
-            "question": "Row 1: [Dot Top-Left] -> [Dot Top-Right]. Row 2: [Dot Bottom-Left] -> [?]. Rule: Move clockwise along corner.",
-            "options": ["Dot Top-Left", "Dot Bottom-Right", "Dot Center", "No Dot"],
-            "answer": "Dot Bottom-Right",
-            "explanation": "Movement logic: The dot moves to the next corner clockwise."
-        },
-        {
-            "category": "Figure Classification",
-            "question": "Shape 1: 'S' shape. Shape 2: 'Z' shape. Shape 3: 'N' shape. Which belongs?",
-            "options": ["Letter 'O'", "Letter 'H'", "Letter 'C'", "Letter 'D'"],
-            "answer": "Letter 'H'",
-            "explanation": "Rotational Symmetry. S, Z, and N look the same when rotated 180 degrees. H also shares this property."
-        },
-        {
-            "category": "Figure Analysis",
-            "question": "Square Folded Diagonally. Punch hole on the folded crease (center of diagonal). Unfold.",
-            "options": ["2 Holes Center", "1 Hole Center", "4 Holes", "No Holes"],
-            "answer": "1 Hole Center",
-            "explanation": "Punching exactly on the fold line results in a single shape when unfolded (or two joined shapes appearing as one)."
-        },
-        {
-            "category": "Verbal Classification",
-            "question": "Which word belongs in the same group as: Amble | Stroll | Saunter",
-            "options": ["Run", "Sprint", "Walk", "Jump", "Hop"],
-            "answer": "Walk",
-            "explanation": "Synonyms for walking slowly/leisurely. 'Walk' is the general category verb that fits best among options (Run/Sprint are too fast)."
-        },
-        {
-            "category": "Number Series",
-            "question": "What comes next: 3, 4, 7, 11, 18, 29, ___",
-            "options": ["40", "47", "50", "35", "45"],
-            "answer": "47",
-            "explanation": "Fibonacci-style addition: 3+4=7, 4+7=11... 18+29=47."
-        },
-        {
-            "category": "Figure Recognition",
-            "question": "Target: Shape 'Diamond'. Where is it hidden?",
-            "options": ["Square Grid", "Argyle Pattern (Sweater)", "Polka Dots", "Stripes"],
-            "answer": "Argyle Pattern (Sweater)",
-            "explanation": "An Argyle pattern consists entirely of repeating diamond shapes."
-        }
-    ]
-}
 
-# --- 2. SESSION STATE MANAGEMENT ---
-# Initialize variables to track progress, score, and timer.
+    return parsed
 
-if 'current_paper' not in st.session_state:
-    st.session_state.current_paper = None
-if 'quiz_active' not in st.session_state:
-    st.session_state.quiz_active = False
-if 'question_index' not in st.session_state:
-    st.session_state.question_index = 0
-if 'score' not in st.session_state:
-    st.session_state.score = 0
-if 'start_time' not in st.session_state:
-    st.session_state.start_time = 0
-if 'user_answers' not in st.session_state:
-    st.session_state.user_answers = []
-if 'finished' not in st.session_state:
-    st.session_state.finished = False
 
-# --- 3. HELPER FUNCTIONS ---
+# -----------------------------
+# Streamlit UI
+# -----------------------------
+st.set_page_config(page_title="Grade 7 Chemistry Quiz", page_icon="🧪", layout="centered")
 
-def start_quiz(paper_name):
-    st.session_state.current_paper = paper_name
-    st.session_state.quiz_active = True
-    st.session_state.question_index = 0
-    st.session_state.score = 0
-    st.session_state.user_answers = []
-    st.session_state.finished = False
-    st.session_state.start_time = time.time()
+st.title("🧪 Grade 7 Chemistry Quiz (Cambridge-style)")
+st.caption("One question per page • No skipping • Instant feedback after each answer • Final summary at the end")
 
-def submit_answer(selected_option):
-    paper = PAPERS[st.session_state.current_paper]
-    current_q = paper[st.session_state.question_index]
-    
-    # Record answer
-    is_correct = (selected_option == current_q['answer'])
-    if is_correct:
-        st.session_state.score += 1
-    
-    st.session_state.user_answers.append({
-        "question": current_q['question'],
-        "selected": selected_option,
-        "correct": current_q['answer'],
-        "explanation": current_q['explanation'],
-        "is_correct": is_correct
-    })
-    
-    # Move to next
-    if st.session_state.question_index < len(paper) - 1:
-        st.session_state.question_index += 1
-    else:
-        st.session_state.finished = True
-        st.session_state.quiz_active = False
-
-def restart():
-    st.session_state.current_paper = None
-    st.session_state.quiz_active = False
-    st.session_state.finished = False
-
-# --- 4. UI LAYOUT ---
-
-st.set_page_config(page_title="CAT4 Practice App", page_icon="📝")
-
-st.title("🧩 CAT4 Level D Practice (Grade 7)")
-
-# A. HOME SCREEN
-if not st.session_state.quiz_active and not st.session_state.finished:
-    st.markdown("### Select a Practice Paper")
-    st.info("You will have **10 minutes** to complete 10 questions.")
-    
-    # Grid Layout for 10 Papers
-    # We will use 2 columns of 5 rows for a clean list look, or a grid.
-    # Let's try a grid of 3 columns for standard, and 2 columns for advanced.
-    
-    st.markdown("#### Standard Papers")
-    row1 = st.columns(3)
-    row2 = st.columns(3)
-    row3 = st.columns(1) # For Paper 7 to sit alone or with others if we reshuffle
-    
-    with row1[0]:
-        if st.button("Start Paper 1", use_container_width=True):
-            start_quiz("Paper 1")
-            st.rerun()
-    with row1[1]:
-        if st.button("Start Paper 2", use_container_width=True):
-            start_quiz("Paper 2")
-            st.rerun()
-    with row1[2]:
-        if st.button("Start Paper 3", use_container_width=True):
-            start_quiz("Paper 3")
-            st.rerun()
-            
-    with row2[0]:
-        if st.button("Start Paper 4", use_container_width=True):
-            start_quiz("Paper 4")
-            st.rerun()
-    with row2[1]:
-        if st.button("Start Paper 5", use_container_width=True):
-            start_quiz("Paper 5")
-            st.rerun()
-    with row2[2]:
-        if st.button("Start Paper 6 (Harder)", use_container_width=True):
-            start_quiz("Paper 6 (Harder)")
-            st.rerun()
-            
-    st.markdown("#### Advanced & Challenge Papers")
-    row_adv_1 = st.columns(2)
-    row_adv_2 = st.columns(2)
-
-    with row_adv_1[0]:
-        if st.button("Start Paper 7 (Advanced)", use_container_width=True):
-            start_quiz("Paper 7 (Advanced)")
-            st.rerun()
-    with row_adv_1[1]:
-        if st.button("Start Paper 8 (Complex Logic)", use_container_width=True):
-            start_quiz("Paper 8 (Complex Logic)")
-            st.rerun()
-            
-    with row_adv_2[0]:
-        if st.button("Start Paper 9 (Spatial Mastery)", use_container_width=True):
-            start_quiz("Paper 9 (Spatial Mastery)")
-            st.rerun()
-    with row_adv_2[1]:
-        if st.button("Start Paper 10 (Challenge)", use_container_width=True):
-            start_quiz("Paper 10 (Challenge)")
-            st.rerun()
-
-# B. QUIZ SCREEN
-elif st.session_state.quiz_active:
-    paper_data = PAPERS[st.session_state.current_paper]
-    q_index = st.session_state.question_index
-    question_data = paper_data[q_index]
-
-    # Timer Logic
-    elapsed_time = time.time() - st.session_state.start_time
-    time_limit = 10 * 60 # 10 minutes in seconds
-    remaining_time = time_limit - elapsed_time
-
-    # Sidebar Status
-    with st.sidebar:
-        st.write(f"**Paper:** {st.session_state.current_paper}")
-        st.write(f"**Question:** {q_index + 1} / {len(paper_data)}")
-        
-        # Timer Display
-        if remaining_time > 0:
-            mins, secs = divmod(int(remaining_time), 60)
-            st.metric("Time Remaining", f"{mins:02d}:{secs:02d}")
-        else:
-            st.error("Time's Up!")
-    
-    # Check if time is up
-    if remaining_time <= 0:
-        st.warning("Time is up! Submitting your current progress...")
-        time.sleep(2)
-        st.session_state.finished = True
-        st.session_state.quiz_active = False
+with st.sidebar:
+    st.header("Settings")
+    st.write("API key is read from Streamlit secrets or environment variable.")
+    st.write(f"Feedback model: `{MODEL_FEEDBACK}`")
+    st.write(f"Summary model: `{MODEL_SUMMARY}`")
+    st.divider()
+    if st.button("Reset quiz (clears all answers)", type="secondary"):
+        for k in list(st.session_state.keys()):
+            del st.session_state[k]
         st.rerun()
 
-    # Progress Bar
-    st.progress((q_index) / len(paper_data))
+# Guard: require API key
+if not API_KEY_VARIABLE:
+    st.error("Missing OPENAI_API_KEY. Add it to your environment or Streamlit secrets and reload.")
+    st.stop()
 
-    # Question Display
-    st.subheader(f"Q{q_index + 1}: {question_data['category']}")
-    st.write(f"**{question_data['question']}**")
+client = get_openai_client(API_KEY_VARIABLE)
 
-    # Options
-    # We use a distinct key for each question to reset selection
-    selection = st.radio("Choose your answer:", question_data['options'], key=f"q_{q_index}", index=None)
+# Init state
+if "idx" not in st.session_state:
+    st.session_state.idx = 0
+if "answers" not in st.session_state:
+    st.session_state.answers = {}  # qid -> answer
+if "feedback" not in st.session_state:
+    st.session_state.feedback = {}  # qid -> feedback dict
+if "qa_log" not in st.session_state:
+    st.session_state.qa_log = []  # list of dicts in order
+if "final_summary" not in st.session_state:
+    st.session_state.final_summary = None
 
-    # Next Button
-    if st.button("Submit Answer & Next" if q_index < 9 else "Finish Quiz", type="primary"):
-        if selection:
-            submit_answer(selection)
-            st.rerun()
-        else:
-            st.warning("Please select an answer to proceed.")
 
-# C. RESULTS SCREEN
-elif st.session_state.finished:
-    st.balloons()
-    st.header("Quiz Complete!")
-    
-    final_score = st.session_state.score
-    total_q = len(PAPERS[st.session_state.current_paper])
-    percentage = int((final_score / total_q) * 100)
-    
-    # Score Card
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Final Score", f"{final_score}/{total_q}")
-    col2.metric("Percentage", f"{percentage}%")
-    
-    # Feedback Message
-    if percentage >= 80:
-        st.success("Excellent work! You are ready for the test.")
-    elif percentage >= 50:
-        st.warning("Good job. Review the explanations for the ones you missed.")
-    else:
-        st.error("Keep practicing. Focus on the Logic and Spatial sections.")
+def current_question() -> Question:
+    return QUESTIONS[st.session_state.idx]
+
+
+def already_answered(qid: str) -> bool:
+    return qid in st.session_state.answers and str(st.session_state.answers[qid]).strip() != ""
+
+
+def already_has_feedback(qid: str) -> bool:
+    return qid in st.session_state.feedback
+
+
+# If completed, show final page
+if st.session_state.idx >= len(QUESTIONS):
+    st.success("✅ Quiz completed!")
+
+    if st.session_state.final_summary is None:
+        st.info("Generating final summary and next-questions design notes...")
+        try:
+            summary = call_openai_for_final_summary(client, st.session_state.qa_log)
+            st.session_state.final_summary = summary
+        except Exception as e:
+            st.error(f"Failed to generate final summary: {e}")
+            st.stop()
+
+    summary = st.session_state.final_summary
+
+    st.subheader("📌 Overall summary")
+    st.write(summary.get("overall_summary", ""))
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("✅ Strengths")
+        st.write("\n".join([f"- {x}" for x in (summary.get("strengths") or [])]) or "—")
+        st.subheader("🎯 Key learning points")
+        st.write("\n".join([f"- {x}" for x in (summary.get("key_learning_points") or [])]) or "—")
+    with col2:
+        st.subheader("🛠️ Gaps to work on")
+        st.write("\n".join([f"- {x}" for x in (summary.get("gaps") or [])]) or "—")
+        st.subheader("⚠️ Misconceptions to fix")
+        st.write("\n".join([f"- {x}" for x in (summary.get("misconceptions_to_fix") or [])]) or "—")
+
+    st.subheader("🧭 Recommended next topics")
+    st.write("\n".join([f"- {x}" for x in (summary.get("recommended_next_topics") or [])]) or "—")
+
+    st.subheader("🧩 Suggested question blueprint (prompt-friendly)")
+    st.json(summary.get("suggested_question_blueprint", {}))
+
+    st.subheader("🧠 Paste-ready prompt to generate the next set of questions")
+    st.code(summary.get("next_question_set_prompt", "").strip() or "—", language="text")
+
+    # Allow export of attempt log for future question generation / analytics
+    export = {
+        "qa_log": st.session_state.qa_log,
+        "final_summary": summary,
+    }
+    st.download_button(
+        "Download results (JSON)",
+        data=json.dumps(export, ensure_ascii=False, indent=2).encode("utf-8"),
+        file_name="chemistry_quiz_results.json",
+        mime="application/json",
+    )
+    st.stop()
+
+
+# Question page
+q = current_question()
+
+progress = (st.session_state.idx) / len(QUESTIONS)
+st.progress(progress, text=f"Progress: {st.session_state.idx}/{len(QUESTIONS)}")
+
+st.subheader(f"Question {st.session_state.idx + 1} of {len(QUESTIONS)}")
+st.markdown(f"**{q.topic}** • {q.marks} mark(s)")
+st.write(q.prompt)
+
+qid = q.id
+default_answer = st.session_state.answers.get(qid, "")
+
+if q.answer_type == "multiline" or len(q.prompt) > 120:
+    ans = st.text_area("Your answer", value=default_answer, height=140, key=f"ans_{qid}")
+else:
+    ans = st.text_input("Your answer", value=default_answer, key=f"ans_{qid}")
+
+ans_clean = (ans or "").strip()
+
+# Enforce "no skip": Next is only possible after answer + feedback
+colA, colB = st.columns([1, 1])
+
+with colA:
+    submit_disabled = (ans_clean == "") or already_has_feedback(qid)
+    if st.button("Submit answer", type="primary", disabled=submit_disabled):
+        # Save answer
+        st.session_state.answers[qid] = ans_clean
+
+        # Call OpenAI for feedback
+        with st.spinner("Getting feedback..."):
+            try:
+                fb = call_openai_for_feedback(client, q, ans_clean)
+                st.session_state.feedback[qid] = fb
+
+                # Log in order
+                st.session_state.qa_log.append(
+                    {
+                        "id": q.id,
+                        "topic": q.topic,
+                        "marks": q.marks,
+                        "question": q.prompt,
+                        "student_answer": ans_clean,
+                        "feedback": fb,
+                    }
+                )
+            except Exception as e:
+                st.error(f"Failed to get feedback: {e}")
+                st.stop()
+
+        st.rerun()
+
+with colB:
+    next_disabled = not already_has_feedback(qid)
+    if st.button("Next question →", disabled=next_disabled):
+        st.session_state.idx += 1
+        st.rerun()
+
+# Display feedback (if available)
+if already_has_feedback(qid):
+    fb = st.session_state.feedback[qid]
 
     st.divider()
-    st.subheader("Detailed Review")
+    st.subheader("🧾 Feedback")
 
-    for idx, ans in enumerate(st.session_state.user_answers):
-        with st.expander(f"Q{idx+1}: {ans['question']} ({'✅ Correct' if ans['is_correct'] else '❌ Incorrect'})"):
-            st.write(f"**Your Answer:** {ans['selected']}")
-            st.write(f"**Correct Answer:** {ans['correct']}")
-            st.info(f"**Explanation:** {ans['explanation']}")
+    verdict = fb.get("verdict", "—")
+    score_band = fb.get("score_band", "—")
+    st.markdown(f"**Verdict:** {verdict}  \n**Score band:** {score_band} / {q.marks}")
 
-    if st.button("Back to Home"):
-        restart()
-        st.rerun()
+    st.markdown("**Quick feedback**")
+    st.write(fb.get("feedback", ""))
+
+    st.markdown("**Model answer (exam-style)**")
+    st.info(fb.get("model_answer", "").strip() or "—")
+
+    st.markdown("**Detailed explanation (why)**")
+    st.write(fb.get("why", "").strip() or "—")
+
+    misconceptions = fb.get("misconceptions", []) or []
+    if misconceptions:
+        st.markdown("**Common misconceptions to watch**")
+        st.write("\n".join([f"- {x}" for x in misconceptions]))
+
+    next_steps = fb.get("next_steps", []) or []
+    if next_steps:
+        st.markdown("**Next steps to improve**")
+        st.write("\n".join([f"- {x}" for x in next_steps]))
+
+    vlinks = fb.get("video_links", []) or []
+    if vlinks:
+        st.markdown("**Suggested explanation videos (YouTube search links)**")
+        for item in vlinks:
+            st.markdown(f"- [{item['query']}]({item['url']})")
+
+    st.caption("To continue, click **Next question →** (you cannot skip questions).")
